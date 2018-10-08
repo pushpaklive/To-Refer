@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="icon" type="image/x-icon" href="neilsoft_icon.ico">
+    <title>Neilsoft Point Cloud Viewer</title>
+    <base href="/">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" crossorigin="anonymous">
+    <link href="https://fonts.googleapis.com/css?family=Alegreya+Sans" rel="stylesheet">
+
+    <!-- Potree CSS files -->
+    <link rel="stylesheet" type="text/css" href="./libs/potree/potree.css">
+    <link rel="stylesheet" type="text/css" href="./libs/jquery-ui/jquery-ui.min.css">
+    <link rel="stylesheet" type="text/css" href="./libs/perfect-scrollbar/css/perfect-scrollbar.css">
+    <link rel="stylesheet" type="text/css" href="./libs/openlayers3/ol.css">
+    <link rel="stylesheet" type="text/css" href="./libs/spectrum/spectrum.css">
+    <link rel="stylesheet" type="text/css" href="./libs/jstree/themes/mixed/style.css">
+    <link rel="stylesheet" type="text/css" href="./styles.css">
+
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" crossorigin="anonymous"></script>
+
+</head>
+
+<body>
+    <script src="./libs/jquery/jquery-3.1.1.min.js"></script>
+    <script src="./libs/spectrum/spectrum.js"></script>
+    <script src="./libs/perfect-scrollbar/js/perfect-scrollbar.jquery.js"></script>
+    <script src="./libs/jquery-ui/jquery-ui.min.js"></script>
+    <script src="./libs/three.js/build/three.min.js"></script>
+    <script src="./libs/other/BinaryHeap.js"></script>
+    <script src="./libs/tween/tween.min.js"></script>
+    <script src="./libs/d3/d3.js"></script>
+    <script src="./libs/proj4/proj4.js"></script>
+    <script src="./libs/openlayers3/ol.js"></script>
+    <script src="./libs/i18next/i18next.js"></script>
+    <script src="./libs/jstree/jstree.js"></script>
+    <script src="./libs/potree/potree.js"></script>
+    <script src="./libs/plasio/js/laslaz.js"></script>
+    <script src="./js/loaders/OBJLoader.js"></script>
+    <script src="./js/controls/OrbitControls.js"></script>
+    <script src="./js/loaders/DDSLoader.js"></script>
+    <script src="./js/loaders/MTLLoader.js"></script>
+    <script src="js/libs/stats.min.js"></script>
+
+    <div class="container-fluid">
+
+        <div class="row">
+
+            <div class="potree_container col-sm-6" style="position: absolute; width: 50%; height: 100%; right: 50%; border-right: 2px solid rgb(242, 240, 253);">
+                <div id="potree_render_area"></div>
+                <div id="potree_sidebar_container"> </div>
+
+            </div>
+            <div class="col-sm-6 float-right objViewerDiv" style="position: absolute; width: 100%; height: 100%; left: 50%;">
+                <a style="color:white;" class="btn btn-sm btn-primary" href="./bigModel.html">Load large sized model</a>
+                <a style="color:white;" class="btn btn-sm btn-primary" href="/">Load original model</a>
+                <div id="objViewer" style="padding-left:0px;padding-top: 0px;border-left: 2px solid rgb(242, 240, 253);"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+
+        window.viewer = new Potree.Viewer(document.getElementById("potree_render_area"));
+
+        viewer.setEDLEnabled(true);
+        viewer.setFOV(60);
+        viewer.setPointBudget(1 * 1000 * 1000);
+        document.title = "";
+        viewer.setEDLEnabled(false);
+        viewer.setBackground("black"); // ["skybox", "gradient", "black", "white"];
+        viewer.setDescription(``);
+        viewer.loadSettingsFromURL();
+
+        viewer.loadGUI(() => {
+            viewer.setLanguage('en');
+            $("#menu_appearance").next().show();
+            $("#menu_tools").next().show();
+            $("#menu_scene").next().show();
+            //viewer.toggleSidebar();
+        });
+
+        Potree.loadPointCloud("http://5.9.65.151/mschuetz/potree/resources/pointclouds/faro/westend_palais/cloud.js", "westend", e => {
+            let pointcloud = e.pointcloud;
+            let material = pointcloud.material;
+            viewer.scene.addPointCloud(pointcloud);
+            material.pointColorType = Potree.PointColorType.RGB; // any Potree.PointColorType.XXXX 
+            material.size = 1;
+            material.pointSizeType = Potree.PointSizeType.ADAPTIVE;
+            material.shape = Potree.PointShape.SQUARE;
+
+            viewer.scene.view.lookAt(new THREE.Vector3(150, 0, 0));
+
+            viewer.fitToScreen();
+        });
+
+    </script>
+
+    <script>
+        var container;
+        var camera, scene, renderer;
+        var controls, light;
+        var mouseX = 0, mouseY = 0;
+        var windowHalfX = window.innerWidth / 2;
+        var windowHalfY = window.innerHeight / 2;
+        var object;
+        init();
+        animate();
+        function init() {
+            //container = document.getElementById("objViewer");
+            container = document.createElement('div');
+            document.getElementById("objViewer").appendChild(container);
+            //document.body.appendChild( container );
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / 2 / window.innerHeight, 2, 2000);
+            camera.position.z = 250;
+
+
+            // scene
+            scene = new THREE.Scene();
+
+            var ambientLight = new THREE.AmbientLight(0xcccccc, 0.4);
+            scene.add(ambientLight);
+            var pointLight = new THREE.PointLight(0xffffff, 0.8);
+            camera.add(pointLight);
+            scene.add(camera);
+            // manager
+            function loadModel() {
+                object.traverse(function (child) {
+                    if (child.isMesh) {
+                        //child.material.map = texture;
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        child.material = modelMaterial;
+                        /* //If material .mtl is loaded
+                        child.material.ambient.setHex(0xFF0000);
+                        child.material.color.setHex(0x00FF00); */
+                    }
+                });
+                object.castShadow = true;
+                object.position.y = - 35;
+                //Lights
+                var spLight = new THREE.SpotLight(0xffffff, 1, 2000, Math.PI / 3);
+                spLight.castShadow = true;
+                spLight.position.set(100, 300, -50);
+                scene.add(spLight);
+
+                var ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000, 10, 10), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+                ground.receiveShadow = true;
+                ground.position.set(0, -20, 0);
+                ground.rotation.x = -Math.PI / 2;
+                scene.add(ground);
+
+                scene.add(object);
+
+                var keyLight = new THREE.DirectionalLight(new THREE.Color('hsl(30, 100%, 75%)'), 1.0);
+                keyLight.position.set(-100, 0, 100);
+
+                var fillLight = new THREE.DirectionalLight(new THREE.Color('hsl(240, 100%, 75%)'), 0.75);
+                fillLight.position.set(100, 0, 100);
+
+                var backLight = new THREE.DirectionalLight(0xffffff, 1.0);
+                backLight.position.set(100, 0, -100).normalize();
+
+                scene.add(keyLight);
+                scene.add(fillLight);
+                scene.add(backLight);
+
+            }
+            var modelMaterial = new THREE.MeshPhongMaterial({
+                color: 0xb9d5ff,
+                ambient: 0xfff660,
+                shininess: 100,
+                wireframe: false,
+                transparent: true,
+                opacity: 0.8,
+                side: THREE.DoubleSide,
+                combine: THREE.MixOperation
+            });
+
+            var manager = new THREE.LoadingManager(loadModel);
+            manager.onProgress = function (item, loaded, total) {
+                console.log(item, loaded, total);
+            };
+            // texture
+            var textureLoader = new THREE.TextureLoader(manager);
+            var texture = textureLoader.load('textures/night-sky.png');
+            // model
+
+            function onProgress(xhr) {
+                if (xhr.lengthComputable) {
+                    var percentComplete = xhr.loaded / xhr.total * 100;
+                    console.log('model ' + Math.round(percentComplete, 2) + '% downloaded');
+                }
+            }
+            function onError(xhr) { }
+            var loader = new THREE.OBJLoader(manager);
+            loader.load('models/houseinterior.obj', function (obj) {
+                obj.scale.set(.3, .3, .3);//to reduce size of model- to one third
+                
+                object = obj;
+            }, onProgress, onError);
+            /*  THREE.Loader.Handlers.add(/\.dds$/i, new THREE.DDSLoader());
+             new THREE.MTLLoader()
+                 .setPath('models/')
+                 .load('colonial_obj.mtl', function (materials) {
+                     materials.preload();
+                     new THREE.OBJLoader()
+                         .setMaterials(materials)
+                         .setPath('models/')
+                         .load('colonial_obj.obj', function (object) {
+                             object.position.y = - 50;
+                             object.scale.set(2.5, 2.5, 2.5);
+                             scene.add(object);
+                             
+                         }, onProgress, onError);
+                 }); */
+            //
+            renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
+            renderer.setClearColor(0x000000, 0);
+            renderer.shadowMapSoft = true;
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            /* renderer.autoClearColor = false;
+            var plane = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.1 }));
+                            plane.position.z = -10;
+                            scene.add(plane); */
+
+            controls = new THREE.OrbitControls(camera);
+            /* controls.enableDamping = true;
+            controls.dampingFactor = 0.25;
+            controls.enableZoom = true; //added peed to the rotation speed of the model */
+            controls.addEventListener('change', render);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth / 2, window.innerHeight);
+            container.appendChild(renderer.domElement);
+
+            //document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+            //
+            window.addEventListener('resize', onWindowResize, false);
+        }
+        function onWindowResize() {
+            windowHalfX = window.innerWidth / 2;
+            windowHalfY = window.innerHeight / 2;
+            camera.aspect = window.innerWidth / 2 / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth / 2, window.innerHeight);
+        }
+        function onDocumentMouseMove(event) {
+            mouseX = (event.clientX - windowHalfX) / 2;
+            mouseY = (event.clientY - windowHalfY) / 2;
+        }
+        //
+        function animate() {
+            requestAnimationFrame(animate);
+            render();
+            controls.update();
+        }
+        function render() {
+            //camera.position.x += ( mouseX - camera.position.x ) * .05;
+            //camera.position.y += ( - mouseY - camera.position.y ) * .05;
+            //camera.lookAt( scene.position );
+            renderer.render(scene, camera);
+        }
+    </script>
+
+
+</body>
+
+</html>

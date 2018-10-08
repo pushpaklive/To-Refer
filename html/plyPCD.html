@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>three.js webgl - PLY</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        body {
+            font-family: Monospace;
+            background-color: #000000;
+            margin: 0px;
+            overflow: hidden;
+        }
+
+        #info {
+            color: #fff;
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            z-index: 100;
+            display: block;
+        }
+
+        a {
+            color: skyblue
+        }
+
+        .button {
+            background: #999;
+            color: #eee;
+            padding: 0.2em 0.5em;
+            cursor: pointer
+        }
+
+        .highlight {
+            background: orange;
+            color: #fff;
+        }
+
+        span {
+            display: inline-block;
+            width: 60px;
+            float: left;
+            text-align: center;
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <!-- <script src="./js/threeLocal.js"></script> -->
+    <script src="http://threejs.org/build/three.min.js"></script>
+    <script src="http://threejs.org/examples/js/controls/OrbitControls.js"></script>
+    <!--Use whenever we get error-->
+
+    <script src="./js/PLYLoader.js"></script>
+    <script src="./js/loaders/PCDLoader.js"></script>
+    <script src="./js/controls/TrackballControls.js"></script>
+
+    <script src="./js/libs/stats.min.js"></script>
+
+    <!--lg-three APIs-->
+    <script src="./libs/lg-three.js"></script>
+    <script src="./libs/socket.io/socket.io.js"></script>
+    <script src="./libs/other/dat.gui.min.js"></script>
+    <script src="./src/Potree.js"></script>
+    <script src="./src/PointCloudOctreeGeometry.js"></script>
+    <script src="./src/PointCloudOctree.js"></script>
+    <script src="./src/loader/POCLoader.js"></script>
+    <script src="./src/loader/PointAttributes.js"></script>
+    <script src="./src/utils.js"></script>
+    <script src="./src/LRU.js"></script>
+    <script src="./js/loaders/OBJLoader.js"></script>
+
+
+    <script>
+
+        var container, stats;
+        var camera, cameraTarget, scene, scene2, renderer;
+        var controls, plane;
+        var pointcloudMaterial;
+        var defaultPointSize = 0.03;
+        var guiChanged = false;
+        var defaultLOD = 2;
+        var pointcloudPath = "resources/pointclouds/lion_takanawa/cloud.js";
+        init();
+        animate();
+        function init() {
+            container = document.createElement('div');
+            document.body.appendChild(container);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 15);
+            camera.position.set(3, 0.10, 3);
+            cameraTarget = new THREE.Vector3(0, -0.1, 0);
+            scene = new THREE.Scene();
+            scene2 = new THREE.Scene();
+            scene.background = new THREE.Color(0xffffff);
+            scene.fog = new THREE.Fog(0x72645b, 2, 15);
+            // Ground
+            plane = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(40, 40),
+                new THREE.MeshPhongMaterial({ color: 0x999999, specular: 0x101010 })
+            );
+            plane.rotation.x = -Math.PI / 2;
+            plane.position.y = -0.9;
+            scene.add(plane);
+            plane.receiveShadow = true;
+
+            //controls
+            controls = new THREE.OrbitControls(camera);
+            /* controls.rotateSpeed = 2.0;
+            controls.zoomSpeed = 0.3;
+            controls.panSpeed = 0.2;
+            controls.noZoom = false;
+            controls.noPan = false;
+            controls.staticMoving = true;
+            controls.dynamicDampingFactor = 0.3;
+            controls.minDistance = 0.3;
+            controls.maxDistance = 0.3 * 100; */
+
+            // PLY file
+            var loader = new THREE.PLYLoader();
+            loader.load('models/ply/ascii/dolphins.ply', function (geometry) {
+                geometry.computeVertexNormals();
+                var material = new THREE.MeshStandardMaterial({ color: 0x0055ff, flatShading: true, side: THREE.DoubleSide });
+                var mesh = new THREE.Mesh(geometry, material);
+                mesh.position.y = - 0.6;
+                mesh.position.z = 0.6;
+                mesh.position.x = 0.5;
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.scale.multiplyScalar(0.001);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                //mesh.position.set( 0, 0, 10 );//not worked
+                scene.add(mesh);
+            });
+
+            var pcdLoader = new THREE.PCDLoader();
+            pcdLoader.load('./models/pcd/binary/Zaghetto.pcd', function (mesh) {
+                mesh.position.y = -0.3;
+                mesh.position.z = 0.6;
+                mesh.position.x = 1;
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                //mesh.position.set( 0, 0, 10 );
+                //scene2.background = new THREE.Color(0xffffff);
+                scene2.add(mesh);
+
+                /*  var center = mesh.geometry.boundingSphere.center;
+                 controls.target.set(center.x, center.y, center.z);
+                 controls.update(); */
+            });
+
+            // instantiate a loader
+            var objLoader = new THREE.OBJLoader();
+            // load a resource
+            objLoader.load(
+                // resource URL
+                'models/house.obj',
+                // called when resource is loaded
+                function (object) {
+                    object.position.y = -1.9;
+                    object.position.z = 0.6;
+                    object.position.x = 1;
+                    object.scale.set(0.2, 0.2, 0.2);
+                    scene.add(object);
+                },
+                // called when loading is in progresses
+                function (xhr) {
+                    console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+                },
+                // called when loading has errors
+                function (error) {
+                    console.log('An error happened');
+                }
+            );
+
+            /* pointcloudMaterial = new THREE.PointCloudMaterial({ size: defaultPointSize, vertexColors: true });
+
+            //// load pointcloud
+            var pco = POCLoader.load(pointcloudPath);
+            //pointCloud = new Potree.PointCloudOctree(pco, pointcloudMaterial);
+            //pointCloud.LOD = defaultLOD;
+            //pointCloud.rotation.set(Math.PI,-1.2,0);
+            //pointCloud.moveToOrigin();
+            //pointCloud.moveToGroundPlane();
+            //scene.add(pointCloud);
+
+            var i = 0; var j = 0;
+            //			for(var i = -2; i <= 2; i++){
+            //				for(var j = -2; j <= 2; j++){
+            var pointcloud = new Potree.PointCloudOctree(pco, pointcloudMaterial);
+            pointcloud.LOD = defaultLOD;
+            //pointcloud.rotation.set(Math.PI,-1.2,0);
+            pointcloud.rotation.set(Math.PI / 2, 0.85 * -Math.PI / 2, -0.0);
+            pointcloud.moveToOrigin();
+            pointcloud.moveToGroundPlane();
+            pointcloud.position.x += 8 * i;
+            pointcloud.position.z += 8 * j;
+
+            //pointclouds.push(pointcloud);
+            scene.add(pointcloud); */
+            /* ISSUE: GET http://localhost:5000/resources/pointclouds/lion_takanawa/data/r/ 404 (Not Found)
+               Potree.PointCloudOctreeGeometryNode.load @ PointCloudOctreeGeometry.js:56
+               load @ POCLoader.js:48
+               init @ plyPCD.html:157
+              (anonymous) @ plyPCD.html:88
+              PointCloudOctreeGeometry.js:51 Failed to load file! HTTP status: 404, file: resources/pointclouds/lion_takanawa/cloud.js/../data/r */
+            //				}
+            //			}
+
+            /* loader.load( './models/ply/binary/Lucy100k.ply', function ( geometry ) {
+                geometry.computeVertexNormals();
+                var material = new THREE.MeshStandardMaterial( { color: 0x0055ff, flatShading: true } );
+                var mesh = new THREE.Mesh( geometry, material );
+                mesh.position.x = - 0.2;
+                mesh.position.y = - 0.02;
+                mesh.position.z = - 0.2;
+                mesh.scale.multiplyScalar( 0.0006 );
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add( mesh );
+            } ); */
+            // Lights
+            scene.add(new THREE.HemisphereLight(0x443333, 0x111122));
+            addShadowedLight(1, 1, 1, 0xffffff, 1.35);
+            addShadowedLight(0.5, 1, -1, 0xffaa00, 1);
+            // renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.gammaInput = true;
+            renderer.gammaOutput = true;
+            renderer.shadowMap.enabled = true;
+            renderer.autoClear = false;
+            container.appendChild(renderer.domElement);
+            // stats
+            stats = new Stats();
+            container.appendChild(stats.dom);
+            // resize
+            window.addEventListener('resize', onWindowResize, false);
+            window.addEventListener('keypress', keyboard);
+        }
+        function addShadowedLight(x, y, z, color, intensity) {
+            var directionalLight = new THREE.DirectionalLight(color, intensity);
+            directionalLight.position.set(x, y, z);
+            scene.add(directionalLight);
+            directionalLight.castShadow = true;
+            var d = 1;
+            directionalLight.shadow.camera.left = -d;
+            directionalLight.shadow.camera.right = d;
+            directionalLight.shadow.camera.top = d;
+            directionalLight.shadow.camera.bottom = -d;
+            directionalLight.shadow.camera.near = 1;
+            directionalLight.shadow.camera.far = 4;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            directionalLight.shadow.bias = -0.001;
+        }
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            controls.handleResize();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        function animate() {
+            requestAnimationFrame(animate);
+            render();
+            controls.update();
+            stats.update();
+        }
+        function render() {
+            /* var timer = Date.now() * 0.0005;
+            camera.position.x = Math.sin(timer) * 2.5;
+            camera.position.z = Math.cos(timer) * 2.5; */
+            camera.lookAt(cameraTarget);
+            //renderer.render(scene, camera);
+            renderer.clear();
+            renderer.render(scene, camera);
+            renderer.clearDepth();
+            renderer.render(scene2, camera);
+        }
+
+        function keyboard(ev) {
+            var ZaghettoMesh = scene.getObjectByName('Zaghetto.pcd');
+            switch (ev.key || String.fromCharCode(ev.keyCode || ev.charCode)) {
+                case '+':
+                    ZaghettoMesh.material.size *= 1.2;
+                    ZaghettoMesh.material.needsUpdate = true;
+                    break;
+                case '-':
+                    ZaghettoMesh.material.size /= 1.2;
+                    ZaghettoMesh.material.needsUpdate = true;
+                    break;
+                case 'c':
+                    ZaghettoMesh.material.color.setHex(Math.random() * 0xffffff);
+                    ZaghettoMesh.material.needsUpdate = true;
+                    break;
+            }
+        }
+
+    </script>
+</body>
+
+</html>
